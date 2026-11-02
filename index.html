@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Run Home!</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap');
+        
+        body {
+            font-family: 'Fredoka', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        /* Pulsing & bounce animations for UI overlays */
+        @keyframes floatAnim {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+        .animate-float {
+            animation: floatAnim 2s ease-in-out infinite;
+        }
+
+        /* Custom scrollbar hide for canvas wrapper */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex flex-col items-center justify-center p-2 sm:p-4 overflow-hidden">
+
+    <!-- Game Container Card -->
+    <div class="relative w-full max-w-4xl bg-slate-800 rounded-2xl shadow-2xl overflow-hidden border-4 border-slate-700 flex flex-col">
+        
+        <!-- Top HUD Header -->
+        <div class="bg-slate-900/90 px-4 py-3 flex flex-wrap items-center justify-between border-b border-slate-700 text-sm sm:text-base gap-2 z-10">
+            <!-- Progress Bar -->
+            <div class="flex items-center gap-3 flex-1 min-w-[200px]">
+                <span class="font-bold text-amber-400 whitespace-nowrap">Distance to Home:</span>
+                <div class="w-full bg-slate-700 h-5 rounded-full overflow-hidden border border-slate-600 relative">
+                    <div id="progressBar" class="h-full bg-gradient-to-r from-amber-500 to-emerald-400 transition-all duration-100 rounded-full" style="width: 0%"></div>
+                    <span id="progressText" class="absolute inset-0 flex items-center justify-center text-xs font-black text-slate-900 drop-shadow">0%</span>
+                </div>
+            </div>
+
+            <!-- Stats & Sound toggle -->
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-1 font-semibold text-rose-400">
+                    <span>Dog Distance:</span>
+                    <span id="dangerMeter" class="font-bold text-white bg-rose-900/80 px-2 py-0.5 rounded border border-rose-500/50">Safe</span>
+                </div>
+                <button id="pauseBtn" class="bg-amber-600 hover:bg-amber-500 text-white p-2 rounded-xl transition flex items-center justify-center border border-amber-400 text-xs font-bold gap-1 px-3" title="Pause Game (P)">
+                    <span id="pauseBtnText">⏸️ PAUSE</span>
+                </button>
+                <button id="muteBtn" class="bg-slate-700 hover:bg-slate-600 text-slate-200 p-2 rounded-xl transition flex items-center justify-center border border-slate-500" title="Toggle Sound">
+                    <svg id="soundIconOn" class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                    <svg id="soundIconOff" class="w-5 h-5 fill-current hidden" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3z"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Canvas Game View Area -->
+        <div class="relative w-full bg-sky-200 overflow-hidden flex items-center justify-center">
+            <canvas id="gameCanvas" class="w-full h-auto block aspect-[16/9] cursor-pointer"></canvas>
+
+            <!-- Overlay Screen: Pause -->
+            <div id="pauseOverlay" class="absolute inset-0 bg-slate-950/75 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-20 hidden">
+                <div class="text-6xl mb-2 animate-bounce">⏸️</div>
+                <h2 class="text-4xl font-black text-amber-400 mb-2">GAME PAUSED</h2>
+                <p class="text-slate-300 text-sm mb-6">Take a breather! Press <kbd class="bg-slate-800 border border-slate-600 px-2 py-1 rounded text-amber-300 font-mono font-bold">P</kbd> or click below to resume running!</p>
+                <button id="resumeBtn" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-lg py-2.5 px-8 rounded-xl shadow-lg transform active:scale-95 transition border border-emerald-300">
+                    RESUME RUNNING 🏃
+                </button>
+            </div>
+
+            <!-- Overlay Screen: Start Game -->
+            <div id="startOverlay" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-20">
+                <div class="animate-float mb-2 text-6xl">🐶 🏃💨</div>
+                <h1 class="text-4xl sm:text-5xl font-black text-amber-400 tracking-wide drop-shadow-md mb-2">RUN HOME!</h1>
+                <p class="text-slate-300 max-w-md text-sm sm:text-base mb-6">
+                    You accidentally made a dog angry! Sprint down the neighborhood street, jump over rocks and bushes, and reach your home safety zone before the dog catches you!
+                </p>
+
+                <!-- Controls Info Box -->
+                <div class="bg-slate-800/90 border border-slate-600 rounded-xl p-4 mb-6 text-left max-w-xs w-full text-xs sm:text-sm space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-400">Jump / Dodge:</span>
+                        <span class="bg-slate-700 px-2 py-1 rounded font-mono font-bold text-amber-300 border border-slate-500">UP Arrow / W</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-400">Pause / Resume:</span>
+                        <span class="bg-slate-700 px-2 py-1 rounded font-mono font-bold text-amber-300 border border-slate-500">SPACE Bar</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-400">Mobile/Touch:</span>
+                        <span class="bg-slate-700 px-2 py-1 rounded font-mono font-bold text-amber-300 border border-slate-500">Tap Screen</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-400">Run Duration:</span>
+                        <span class="font-bold text-emerald-400">~25 Seconds</span>
+                    </div>
+                </div>
+
+                <button id="startBtn" class="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-xl py-3 px-10 rounded-2xl shadow-lg transform active:scale-95 transition border-2 border-emerald-300">
+                    START RUNNING!
+                </button>
+            </div>
+
+            <!-- Overlay Screen: Game Over -->
+            <div id="gameOverOverlay" class="absolute inset-0 bg-rose-950/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20 hidden">
+                <div class="text-6xl mb-3">🐶💥</div>
+                <h2 class="text-4xl sm:text-5xl font-black text-rose-400 mb-2 drop-shadow">CAUGHT BY THE DOG!</h2>
+                <p class="text-rose-200 max-w-sm text-sm sm:text-base mb-6">
+                    Ouch! The angry dog tackled you right before you made it safely home! Try jumping earlier over obstacles!
+                </p>
+                <button id="restartBtn" class="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xl py-3 px-8 rounded-2xl shadow-lg transform active:scale-95 transition border-2 border-amber-200">
+                    TRY AGAIN 🔄
+                </button>
+            </div>
+
+            <!-- Overlay Screen: Victory Screen -->
+            <div id="victoryOverlay" class="absolute inset-0 bg-emerald-950/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20 hidden">
+                <div class="animate-float text-6xl mb-3">🏡✨</div>
+                <h2 class="text-4xl sm:text-5xl font-black text-amber-300 mb-2 drop-shadow">SAFE AT HOME!</h2>
+                <p class="text-emerald-200 max-w-md text-sm sm:text-base mb-6">
+                    Hooray! You slammed the front door just in time! The angry dog is barking outside while you relax safely inside!
+                </p>
+                <button id="playAgainBtn" class="bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-black text-xl py-3 px-8 rounded-2xl shadow-lg transform active:scale-95 transition border-2 border-emerald-200">
+                    PLAY AGAIN 🏃💨
+                </button>
+            </div>
+        </div>
+
+        <!-- Bottom Controls & Hints bar -->
+        <div class="bg-slate-900 px-4 py-3 border-t border-slate-700 flex flex-wrap items-center justify-between text-xs sm:text-sm text-slate-400 gap-2">
+            <div class="flex items-center gap-2">
+                <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                <span>Press <kbd class="bg-slate-800 border border-slate-600 px-1.5 py-0.5 rounded text-amber-300 font-mono font-bold">UP ARROW</kbd> to Jump | <kbd class="bg-slate-800 border border-slate-600 px-1.5 py-0.5 rounded text-amber-300 font-mono font-bold">SPACE</kbd> to Pause</span>
+            </div>
+            <div class="text-slate-500 italic">
+                Tip: Colliding with stones or bushes slows you down and lets the dog get closer!
+            </div>
+        </div>
+
+    </div>
+
+    <!-- JavaScript Game Logic & Web Audio synth -->
+    <script>
+        // --- Web Audio API Controller ---
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+                this.speechVoice = null;
+                this.initSpeech();
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            initSpeech() {
+                if ('speechSynthesis' in window) {
+                    const loadVoices = () => {
+                        const voices = window.speechSynthesis.getVoices();
+                        this.speechVoice = voices.find(v => v.lang.startsWith('ur')) || null;
+                    };
+                    loadVoices();
+                    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+                        window.speechSynthesis.onvoiceschanged = loadVoices;
+                    }
+                }
+            }
+
+            speakUrdu(text) {
+                if (this.muted || !('speechSynthesis' in window)) return;
+                try {
+                    window.speechSynthesis.cancel(); // Stop current speech
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = 'ur-PK';
+                    utterance.pitch = 1.3; // Higher pitch for a young boy's voice
+                    utterance.rate = 1.15;  // Energetic pace
+                    if (this.speechVoice) utterance.voice = this.speechVoice;
+                    window.speechSynthesis.speak(utterance);
+                } catch(e){}
+            }
+
+            playJump() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(220, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(580, this.ctx.currentTime + 0.15);
+                    gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.15);
+                } catch(e){}
+            }
+
+            playHit() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(140, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.25);
+                    gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.25);
+                } catch(e){}
+            }
+
+            playBark() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    // Double bark synthesis
+                    [0, 0.12].forEach(delay => {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'sawtooth';
+                        osc.frequency.setValueAtTime(280, this.ctx.currentTime + delay);
+                        osc.frequency.linearRampToValueAtTime(110, this.ctx.currentTime + delay + 0.09);
+                        gain.gain.setValueAtTime(0.35, this.ctx.currentTime + delay);
+                        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + delay + 0.09);
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+                        osc.start(this.ctx.currentTime + delay);
+                        osc.stop(this.ctx.currentTime + delay + 0.09);
+                    });
+                } catch(e){}
+            }
+
+            playWin() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const notes = [261.63, 329.63, 392.00, 523.25];
+                    notes.forEach((freq, idx) => {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.value = freq;
+                        const startTime = this.ctx.currentTime + idx * 0.12;
+                        gain.gain.setValueAtTime(0.3, startTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+                        osc.start(startTime);
+                        osc.stop(startTime + 0.3);
+                    });
+                } catch(e){}
+            }
+
+            playGameOver() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const notes = [300, 260, 220, 180];
+                    notes.forEach((freq, idx) => {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'sawtooth';
+                        osc.frequency.value = freq;
+                        const startTime = this.ctx.currentTime + idx * 0.15;
+                        gain.gain.setValueAtTime(0.3, startTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.2);
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+                        osc.start(startTime);
+                        osc.stop(startTime + 0.2);
+                    });
+                } catch(e){}
+            }
+        }
+
+        const sound = new SoundFX();
+
+        // --- Game Setup & Variables ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const GAME_WIDTH = 1000;
+        const GAME_HEIGHT = 562;
+        canvas.width = GAME_WIDTH;
+        canvas.height = GAME_HEIGHT;
+
+        const GROUND_Y = 460;
+        const RUN_DURATION_SEC = 25;
+
+        // Game state variables
+        let gameState = 'START'; // START, PLAYING, PAUSED, GAMEOVER, VICTORY
+        let lastTime = 0;
+        let gameTime = 0;
+        let bgOffset = 0;
+        let baseSpeed = 380;
+        let currentSpeed = baseSpeed;
+
+        // Urdu lines database
+        const urduLines = {
+            start: "او مار گئے، اج تو بچنا مشکل ہے، بھاگو!",
+            jump: ["یا اللہ!", "اوہو!", "چھلانگ!"],
+            hit: "آہ! بچاؤ!",
+            win: "الحمدللہ! میں گھر پہنچ گیا!",
+            gameOver: "توبہ! کتے نے پکڑ لیا!"
+        };
+
+        // Current active speech bubble text & timer for visual display
+        let currentSpeechBubble = { text: '', timer: 0 };
+
+        function showSpeechBubble(text, duration = 2.5) {
+            currentSpeechBubble.text = text;
+            currentSpeechBubble.timer = duration;
+        }
+
+        // Player Stats & Physics
+        const player = {
+            x: 280,
+            y: GROUND_Y,
+            width: 32,
+            height: 60,
+            velocityY: 0,
+            jumpForce: -620,
+            gravity: 1600,
+            isGrounded: true,
+            runFrame: 0,
+            invulnerableTimer: 0,
+            stumbleTimer: 0
+        };
+
+        // Dog Enemy Stats & Distance Logic
+        const dog = {
+            x: 60,
+            y: GROUND_Y,
+            distance: 230,
+            minDistance: 35,
+            maxDistance: 320,
+            barkTimer: 0.5
+        };
+
+        // Scenery & Goal
+        const house = {
+            x: GAME_WIDTH + 300,
+            y: GROUND_Y,
+            width: 160,
+            height: 180,
+            visible: false
+        };
+
+        let obstacles = [];
+        let particles = [];
+        let nextObstacleTimer = 1.2;
+
+        // Background Parallax Decor
+        const clouds = [
+            { x: 100, y: 70, size: 30, speed: 15 },
+            { x: 400, y: 110, size: 42, speed: 20 },
+            { x: 750, y: 60, size: 35, speed: 12 },
+            { x: 950, y: 120, size: 25, speed: 18 }
+        ];
+
+        const housesScenery = [
+            { x: 50, color: '#f87171', roof: '#991b1b' },
+            { x: 320, color: '#60a5fa', roof: '#1e40af' },
+            { x: 600, color: '#fbbf24', roof: '#b45309' },
+            { x: 880, color: '#34d399', roof: '#065f46' }
+        ];
+
+        function togglePause() {
+            if (gameState !== 'PLAYING' && gameState !== 'PAUSED') return;
+            
+            if (gameState === 'PLAYING') {
+                gameState = 'PAUSED';
+                document.getElementById('pauseOverlay').classList.remove('hidden');
+                document.getElementById('pauseBtnText').innerText = '▶️ RESUME';
+            } else {
+                gameState = 'PAUSED';
+                gameState = 'PLAYING';
+                document.getElementById('pauseOverlay').classList.add('hidden');
+                document.getElementById('pauseBtnText').innerText = '⏸️ PAUSE';
+            }
+        }
+
+        function triggerJump() {
+            sound.init();
+            if (gameState === 'PLAYING' && player.isGrounded) {
+                player.velocityY = player.jumpForce;
+                player.isGrounded = false;
+                sound.playJump();
+
+                // Randomly trigger Urdu jump shout (30% chance to prevent cluttering audio)
+                if (Math.random() < 0.35) {
+                    const jumpPhrase = urduLines.jump[Math.floor(Math.random() * urduLines.jump.length)];
+                    sound.speakUrdu(jumpPhrase);
+                }
+
+                for (let i = 0; i < 8; i++) {
+                    particles.push({
+                        x: player.x + 10,
+                        y: player.y,
+                        vx: (Math.random() - 0.5) * 100 - 50,
+                        vy: (Math.random() - 0.5) * 50,
+                        life: 0.3,
+                        maxLife: 0.3,
+                        color: '#cbd5e1',
+                        size: Math.random() * 6 + 4
+                    });
+                }
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                togglePause();
+            } else if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+                e.preventDefault();
+                triggerJump();
+            } else if (e.code === 'KeyP' || e.code === 'Escape') {
+                e.preventDefault();
+                togglePause();
+            }
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            if (gameState === 'PLAYING') triggerJump();
+        });
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (gameState === 'PLAYING') triggerJump();
+        }, { passive: false });
+
+        document.getElementById('pauseBtn').addEventListener('click', togglePause);
+        document.getElementById('resumeBtn').addEventListener('click', togglePause);
+
+        // UI Buttons
+        document.getElementById('startBtn').addEventListener('click', () => {
+            sound.init();
+            startGame();
+        });
+
+        document.getElementById('restartBtn').addEventListener('click', () => {
+            startGame();
+        });
+
+        document.getElementById('playAgainBtn').addEventListener('click', () => {
+            startGame();
+        });
+
+        // Sound Toggle Button
+        const muteBtn = document.getElementById('muteBtn');
+        const iconOn = document.getElementById('soundIconOn');
+        const iconOff = document.getElementById('soundIconOff');
+
+        muteBtn.addEventListener('click', () => {
+            sound.init();
+            sound.muted = !sound.muted;
+            if (sound.muted) {
+                iconOn.classList.add('hidden');
+                iconOff.classList.remove('hidden');
+                if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+            } else {
+                iconOn.classList.remove('hidden');
+                iconOff.classList.add('hidden');
+            }
+        });
+
+        // --- Core Game Functions ---
+        function startGame() {
+            gameState = 'PLAYING';
+            gameTime = 0;
+            bgOffset = 0;
+            currentSpeed = baseSpeed;
+
+            player.y = GROUND_Y;
+            player.velocityY = 0;
+            player.isGrounded = true;
+            player.invulnerableTimer = 0;
+            player.stumbleTimer = 0;
+
+            dog.distance = 230;
+            dog.barkTimer = 0.5;
+
+            obstacles = [];
+            particles = [];
+            nextObstacleTimer = 1.2;
+
+            house.x = GAME_WIDTH + 300;
+            house.visible = false;
+
+            document.getElementById('startOverlay').classList.add('hidden');
+            document.getElementById('gameOverOverlay').classList.add('hidden');
+            document.getElementById('victoryOverlay').classList.add('hidden');
+            document.getElementById('pauseOverlay').classList.add('hidden');
+            document.getElementById('pauseBtnText').innerText = '⏸️ PAUSE';
+
+            sound.speakUrdu(urduLines.start);
+            updateHUD();
+        }
+
+        function spawnObstacle() {
+            const types = ['stone', 'bush'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            
+            if (type === 'stone') {
+                obstacles.push({
+                    type: 'stone',
+                    x: GAME_WIDTH + 50,
+                    y: GROUND_Y,
+                    width: 40,
+                    height: 28,
+                    color: '#64748b'
+                });
+            } else {
+                obstacles.push({
+                    type: 'bush',
+                    x: GAME_WIDTH + 50,
+                    y: GROUND_Y,
+                    width: 52,
+                    height: 48,
+                    color: '#15803d'
+                });
+            }
+        }
+
+        function triggerObstacleHit(obs) {
+            if (player.invulnerableTimer > 0) return;
+
+            sound.playHit();
+            sound.speakUrdu(urduLines.hit);
+            player.invulnerableTimer = 1.2;
+            player.stumbleTimer = 0.5;
+            dog.distance -= 75;
+
+            for (let i = 0; i < 12; i++) {
+                particles.push({
+                    x: player.x,
+                    y: player.y - 20,
+                    vx: (Math.random() - 0.5) * 200,
+                    vy: (Math.random() - 0.5) * 200 - 50,
+                    life: 0.4,
+                    maxLife: 0.4,
+                    color: obs.type === 'stone' ? '#94a3b8' : '#22c55e',
+                    size: Math.random() * 8 + 3
+                });
+            }
+        }
+
+        // --- Game Loop Update ---
+        function update(dt) {
+            if (gameState !== 'PLAYING') return;
+
+            gameTime += dt;
+            const progressRatio = Math.min(gameTime / RUN_DURATION_SEC, 1.0);
+
+            if (player.stumbleTimer > 0) {
+                player.stumbleTimer -= dt;
+                currentSpeed = baseSpeed * 0.4;
+            } else {
+                currentSpeed = baseSpeed + (progressRatio * 60);
+            }
+
+            if (player.invulnerableTimer > 0) {
+                player.invulnerableTimer -= dt;
+            }
+
+            bgOffset += currentSpeed * dt;
+
+            // Player Physics
+            player.velocityY += player.gravity * dt;
+            player.y += player.velocityY * dt;
+
+            if (player.y >= GROUND_Y) {
+                player.y = GROUND_Y;
+                player.velocityY = 0;
+                player.isGrounded = true;
+            }
+
+            player.runFrame += dt * (currentSpeed / 25);
+
+            // Dog Catch Logic & Distance Management
+            if (player.stumbleTimer <= 0 && dog.distance < dog.maxDistance) {
+                dog.distance += 15 * dt; 
+            }
+
+            dog.barkTimer -= dt;
+            if (dog.barkTimer <= 0) {
+                sound.playBark();
+                dog.barkTimer = 1.2 + Math.random() * 1.5;
+            }
+
+            dog.x = player.x - dog.distance;
+
+            // Check Game Over Condition
+            if (dog.distance <= dog.minDistance) {
+                gameState = 'GAMEOVER';
+                sound.playGameOver();
+                sound.speakUrdu(urduLines.gameOver);
+                document.getElementById('gameOverOverlay').classList.remove('hidden');
+                return;
+            }
+
+            // Obstacle Spawning & Movement
+            if (progressRatio < 0.92) {
+                nextObstacleTimer -= dt;
+                if (nextObstacleTimer <= 0) {
+                    spawnObstacle();
+                    nextObstacleTimer = 1.1 + Math.random() * 1.3;
+                }
+            }
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i];
+                obs.x -= currentSpeed * dt;
+
+                const playerBox = {
+                    left: player.x - player.width/2 + 8,
+                    right: player.x + player.width/2 - 8,
+                    top: player.y - player.height + 10,
+                    bottom: player.y
+                };
+
+                const obsBox = {
+                    left: obs.x - obs.width/2 + 5,
+                    right: obs.x + obs.width/2 - 5,
+                    top: obs.y - obs.height + 5,
+                    bottom: obs.y
+                };
+
+                if (playerBox.right > obsBox.left &&
+                    playerBox.left < obsBox.right &&
+                    playerBox.bottom > obsBox.top &&
+                    playerBox.top < obsBox.bottom) {
+                    
+                    triggerObstacleHit(obs);
+                }
+
+                if (obs.x < -100) {
+                    obstacles.splice(i, 1);
+                }
+            }
+
+            // Spawn Home at End Sequence
+            if (progressRatio >= 0.95) {
+                house.visible = true;
+                house.x -= currentSpeed * dt;
+
+                if (player.x >= house.x + 40) {
+                    gameState = 'VICTORY';
+                    sound.playWin();
+                    sound.speakUrdu(urduLines.win);
+                    document.getElementById('victoryOverlay').classList.remove('hidden');
+                }
+            }
+
+            clouds.forEach(c => {
+                c.x -= c.speed * dt;
+                if (c.x < -100) c.x = GAME_WIDTH + 100;
+            });
+
+            housesScenery.forEach(h => {
+                h.x -= (currentSpeed * 0.3) * dt;
+                if (h.x < -200) h.x = GAME_WIDTH + 200;
+            });
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.life -= dt;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            // Update Speech Bubble Timer
+            if (currentSpeechBubble.timer > 0) {
+                currentSpeechBubble.timer -= dt;
+            }
+
+            updateHUD();
+        }
+
+        function updateHUD() {
+            const progress = Math.min(Math.floor((gameTime / RUN_DURATION_SEC) * 100), 100);
+            document.getElementById('progressBar').style.width = `${progress}%`;
+            document.getElementById('progressText').innerText = `${progress}%`;
+
+            const dangerMeter = document.getElementById('dangerMeter');
+            if (dog.distance < 90) {
+                dangerMeter.innerText = "CRITICAL!";
+                dangerMeter.className = "font-bold text-white bg-rose-600 px-2 py-0.5 rounded border border-rose-400 animate-pulse";
+            } else if (dog.distance < 160) {
+                dangerMeter.innerText = "WARNING!";
+                dangerMeter.className = "font-bold text-slate-900 bg-amber-400 px-2 py-0.5 rounded border border-amber-300";
+            } else {
+                dangerMeter.innerText = "SAFE DISTANCE";
+                dangerMeter.className = "font-bold text-white bg-emerald-800 px-2 py-0.5 rounded border border-emerald-500";
+            }
+        }
+
+        // --- Render / Drawing Loop ---
+        function draw() {
+            // Clear Screen (Sky Gradient)
+            const skyGrad = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
+            skyGrad.addColorStop(0, '#38bdf8');
+            skyGrad.addColorStop(0.7, '#bae6fd');
+            skyGrad.addColorStop(1, '#fef08a');
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+            // Draw Sun
+            ctx.fillStyle = '#fef08a';
+            ctx.beginPath();
+            ctx.arc(880, 90, 45, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw Parallax Background Clouds
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+            clouds.forEach(c => {
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, c.size, 0, Math.PI * 2);
+                ctx.arc(c.x + c.size * 0.6, c.y - c.size * 0.2, c.size * 0.7, 0, Math.PI * 2);
+                ctx.arc(c.x + c.size * 1.2, c.y, c.size * 0.6, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Draw Parallax Background Houses
+            housesScenery.forEach(h => {
+                // House Body
+                ctx.fillStyle = h.color;
+                ctx.fillRect(h.x, GROUND_Y - 120, 110, 120);
+                // Roof
+                ctx.fillStyle = h.roof;
+                ctx.beginPath();
+                ctx.moveTo(h.x - 10, GROUND_Y - 120);
+                ctx.lineTo(h.x + 55, GROUND_Y - 170);
+                ctx.lineTo(h.x + 120, GROUND_Y - 120);
+                ctx.fill();
+            });
+
+            // Draw Ground / Street
+            ctx.fillStyle = '#475569'; // Asphalt street
+            ctx.fillRect(0, GROUND_Y, GAME_WIDTH, GAME_HEIGHT - GROUND_Y);
+
+            // Sidewalk Edge
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillRect(0, GROUND_Y - 12, GAME_WIDTH, 12);
+
+            // Grass strip behind sidewalk
+            ctx.fillStyle = '#16a34a';
+            ctx.fillRect(0, GROUND_Y - 22, GAME_WIDTH, 10);
+
+            // Scrolling Road Dashed Lines
+            ctx.strokeStyle = '#fde047';
+            ctx.lineWidth = 6;
+            ctx.setLineDash([35, 25]);
+            ctx.lineDashOffset = -bgOffset % 60;
+            ctx.beginPath();
+            ctx.moveTo(0, GROUND_Y + 45);
+            ctx.lineTo(GAME_WIDTH, GROUND_Y + 45);
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset dash
+
+            // Draw Goal House (Victory Zone)
+            if (house.visible) {
+                // House Body
+                ctx.fillStyle = '#f59e0b';
+                ctx.fillRect(house.x, house.y - house.height, house.width, house.height);
+
+                // Roof
+                ctx.fillStyle = '#b45309';
+                ctx.beginPath();
+                ctx.moveTo(house.x - 20, house.y - house.height);
+                ctx.lineTo(house.x + house.width / 2, house.y - house.height - 70);
+                ctx.lineTo(house.x + house.width + 20, house.y - house.height);
+                ctx.fill();
+
+                // Front Door
+                ctx.fillStyle = '#78350f';
+                ctx.fillRect(house.x + 40, house.y - 110, 55, 110);
+                // Door Knob
+                ctx.fillStyle = '#fef08a';
+                ctx.beginPath();
+                ctx.arc(house.x + 85, house.y - 55, 5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Welcome Sign
+                ctx.fillStyle = '#22c55e';
+                ctx.fillRect(house.x + 110, house.y - 140, 80, 35);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 14px Fredoka, sans-serif';
+                ctx.fillText('HOME!', house.x + 125, house.y - 117);
+            }
+
+            // Draw Obstacles
+            obstacles.forEach(obs => {
+                if (obs.type === 'stone') {
+                    // Rock / Stone Drawing
+                    ctx.fillStyle = obs.color;
+                    ctx.beginPath();
+                    ctx.moveTo(obs.x - obs.width/2, obs.y);
+                    ctx.lineTo(obs.x - obs.width/2 + 6, obs.y - obs.height + 6);
+                    ctx.lineTo(obs.x, obs.y - obs.height);
+                    ctx.lineTo(obs.x + obs.width/2 - 4, obs.y - obs.height + 8);
+                    ctx.lineTo(obs.x + obs.width/2, obs.y);
+                    ctx.closePath();
+                    ctx.fill();
+                    // Rock Highlights
+                    ctx.fillStyle = '#94a3b8';
+                    ctx.fillRect(obs.x - 8, obs.y - obs.height + 6, 8, 6);
+                } else {
+                    // Bush Drawing
+                    ctx.fillStyle = obs.color;
+                    ctx.beginPath();
+                    ctx.arc(obs.x - 12, obs.y - 18, 18, 0, Math.PI * 2);
+                    ctx.arc(obs.x + 12, obs.y - 18, 18, 0, Math.PI * 2);
+                    ctx.arc(obs.x, obs.y - 28, 22, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Darker leaf details
+                    ctx.fillStyle = '#15803d';
+                    ctx.beginPath();
+                    ctx.arc(obs.x - 5, obs.y - 14, 10, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+
+            // Draw Angry Dog
+            drawDog(ctx, dog.x, dog.y, player.runFrame);
+
+            // Draw Running Player Character (Flashes if hit)
+            if (player.invulnerableTimer <= 0 || Math.floor(Date.now() / 80) % 2 === 0) {
+                drawPlayer(ctx, player.x, player.y, player.runFrame, player.isGrounded, player.stumbleTimer > 0);
+            }
+
+            // Draw Urdu Speech Bubble above player if active
+            if (currentSpeechBubble.timer > 0 && currentSpeechBubble.text) {
+                drawSpeechBubble(ctx, player.x, player.y - 85, currentSpeechBubble.text);
+            }
+
+            // Draw Particles
+            particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life / p.maxLife;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            });
+        }
+
+        // Draw Urdu Speech Bubble Component
+        function drawSpeechBubble(ctx, x, y, text) {
+            ctx.save();
+            ctx.font = 'bold 16px sans-serif';
+            const textWidth = ctx.measureText(text).width;
+            const padX = 14;
+            const padY = 8;
+            const bgWidth = textWidth + padX * 2;
+            const bgHeight = 32;
+
+            // Bubble background
+            ctx.fillStyle = '#ffffff';
+            ctx.strokeStyle = '#0284c7';
+            ctx.lineWidth = 2;
+
+            ctx.beginPath();
+            ctx.roundRect(x - bgWidth / 2, y - bgHeight / 2, bgWidth, bgHeight, 10);
+            ctx.fill();
+            ctx.stroke();
+
+            // Bubble Pointer Arrow
+            ctx.beginPath();
+            ctx.moveTo(x - 6, y + bgHeight / 2);
+            ctx.lineTo(x, y + bgHeight / 2 + 8);
+            ctx.lineTo(x + 6, y + bgHeight / 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+
+            // Text
+            ctx.fillStyle = '#0f172a';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, x, y);
+
+            ctx.restore();
+        }
+
+        // --- Custom Canvas Vector Character Art ---
+        function drawPlayer(ctx, x, y, frame, isGrounded, isStumbling) {
+            ctx.save();
+            ctx.translate(x, y);
+
+            // Forward tilt angle when running
+            const tilt = isStumbling ? -0.2 : (isGrounded ? 0.15 : -0.05);
+            ctx.rotate(tilt);
+
+            // Head & Hair
+            ctx.fillStyle = '#fbcfe8'; // Face skin tone
+            ctx.beginPath();
+            ctx.arc(0, -58, 14, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Hair
+            ctx.fillStyle = '#475569';
+            ctx.beginPath();
+            ctx.arc(0, -62, 15, Math.PI, Math.PI * 2);
+            ctx.fill();
+
+            // Sweat Droplets if stumbling
+            if (isStumbling) {
+                ctx.fillStyle = '#38bdf8';
+                ctx.beginPath();
+                ctx.arc(14, -65, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Body / Shirt
+            ctx.fillStyle = isStumbling ? '#ef4444' : '#0284c7'; // Blue shirt (turns red on stumble)
+            ctx.fillRect(-10, -44, 20, 26);
+
+            // Legs Animation
+            ctx.strokeStyle = '#1e293b'; // Pants color
+            ctx.lineWidth = 6;
+            ctx.lineCap = 'round';
+
+            if (isGrounded) {
+                const legSwing = Math.sin(frame * 12) * 22;
+                // Left Leg
+                ctx.beginPath();
+                ctx.moveTo(-4, -18);
+                ctx.lineTo(-4 - legSwing, 0);
+                ctx.stroke();
+
+                // Right Leg
+                ctx.beginPath();
+                ctx.moveTo(4, -18);
+                ctx.lineTo(4 + legSwing, 0);
+                ctx.stroke();
+            } else {
+                // Jumping Leg pose
+                ctx.beginPath();
+                ctx.moveTo(-4, -18);
+                ctx.lineTo(-14, -6);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(4, -18);
+                ctx.lineTo(12, -2);
+                ctx.stroke();
+            }
+
+            // Arms Animation
+            ctx.strokeStyle = '#fbcfe8';
+            ctx.lineWidth = 5;
+            const armSwing = Math.sin(frame * 12) * 18;
+
+            ctx.beginPath();
+            ctx.moveTo(0, -38);
+            ctx.lineTo(armSwing, -24);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function drawDog(ctx, x, y, frame) {
+            ctx.save();
+            ctx.translate(x, y);
+
+            // Dog Body
+            ctx.fillStyle = '#b45309'; // Brown coat
+            ctx.beginPath();
+            ctx.ellipse(0, -22, 24, 15, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Head (Snarling forward)
+            ctx.beginPath();
+            ctx.arc(18, -28, 13, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Snout
+            ctx.fillStyle = '#78350f';
+            ctx.fillRect(24, -30, 10, 8);
+
+            // Angry Red Eye
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath();
+            ctx.arc(22, -31, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Ears
+            ctx.fillStyle = '#78350f';
+            ctx.beginPath();
+            ctx.moveTo(10, -36);
+            ctx.lineTo(4, -46);
+            ctx.lineTo(16, -38);
+            ctx.fill();
+
+            // Tail (Wagging aggressively)
+            const tailAngle = Math.sin(frame * 20) * 0.4;
+            ctx.strokeStyle = '#b45309';
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(-22, -24);
+            ctx.lineTo(-34 + Math.sin(tailAngle)*5, -34 + Math.cos(tailAngle)*5);
+            ctx.stroke();
+
+            // Dog Running Legs
+            const legCycle = Math.sin(frame * 14) * 16;
+            ctx.strokeStyle = '#78350f';
+            ctx.lineWidth = 5;
+
+            // Front Legs
+            ctx.beginPath();
+            ctx.moveTo(12, -10);
+            ctx.lineTo(12 + legCycle, 0);
+            ctx.stroke();
+
+            // Back Legs
+            ctx.beginPath();
+            ctx.moveTo(-12, -10);
+            ctx.lineTo(-12 - legCycle, 0);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        // --- Main Animation Loop ---
+        function mainLoop(timestamp) {
+            if (!lastTime) lastTime = timestamp;
+            const dt = Math.min((timestamp - lastTime) / 1000, 0.1); // Cap delta time
+            lastTime = timestamp;
+
+            update(dt);
+            draw();
+
+            requestAnimationFrame(mainLoop);
+        }
+
+        // Start request animation loop on load
+        requestAnimationFrame(mainLoop);
+
+    </script>
+</body>
+</html>
